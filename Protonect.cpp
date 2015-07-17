@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
   }
 
   std::string serial = freenect2.getDefaultDeviceSerialNumber();
-  int threshold = 128;
+  int threshold = -1;
 
   for(int argI = 1; argI < argc; ++argI)
   {
@@ -191,7 +191,12 @@ int main(int argc, char *argv[])
     cv::Mat undistortedFrame = cv::Mat(undistorted.height, undistorted.width, CV_32FC1, undistorted.data) / 4500.0f;
     cv::Mat img_bw;
     undistortedFrame.convertTo(img_bw, CV_8UC4, 255);
-    cv::Mat thresh = img_bw > threshold;
+    cv::Mat thresh;
+    if (threshold >= 0) {
+      thresh = img_bw > threshold;
+    } else {
+      thresh = img_bw;
+    }
 
     cv::imshow("undistorted", thresh);
 
