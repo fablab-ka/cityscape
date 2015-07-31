@@ -72,6 +72,12 @@ class Vector:
       return self / self.getLength()
     else: return Vector(0,0)
 
+  def getLeftPerpendicular(self):
+    return Vector(-self.y, self.x)
+
+  def getRightPerpendicular(self):
+    return Vector(self.y, -self.x)
+
   def __add__(self, other):
     if isinstance(other, Vector):
       return Vector(self.x + other.x, self.y + other.y)

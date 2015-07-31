@@ -14,17 +14,37 @@ class Main:
 
     self.screenDim = (1024, 786)
     self.screen = pygame.display.set_mode(self.screenDim)
-    self.background = (255,255,255)
+    self.background = (255, 255, 255)
     self.running = False
 
     self.scoreCheckInterval = 10000
     self.lastScoreCheck = 0
     self.currentBlobManagerScore = 0
 
-    img = pygame.image.load('map.png')
-    self.mapData = pygame.transform.scale(img, self.screenDim)
+    self.mapData = None
+    #self.mapDataPath = "data/test_"
+    self.mapDataPath = "map.png"
+
+    self.updateBlobs = True
+
     self.blobManager = BlobManager(self.screenDim, self.mapData)
-    self.roadManager = RoadManager(self.screenDim, self.mapData, self.blobManager)
+    self.roadManager = RoadManager(self.screenDim, self.blobManager)
+
+    self.mapReloadInterval = 1000
+    self.lastMapReload = 0
+
+  def reloadMap(self):
+    list = range(1, 11)
+    list.reverse()
+    for i in list:
+      filename = self.mapDataPath# + str(i) + ".png"
+      if path.isfile(filename):
+        print filename
+        img = pygame.image.load(filename)
+        self.mapData = pygame.transform.scale(img, self.screenDim)
+        self.blobManager.mapData = self.mapData
+        break
+    print "done " + str(self.mapData)
 
   def poll(self):
     events = pygame.event.get()
@@ -32,14 +52,35 @@ class Main:
       if e.type == pygame.QUIT:
         self.running = False
       elif e.type == pygame.KEYUP:
+        print e.key
         if e.key == pygame.K_ESCAPE:
           self.running = False
+        elif e.key == pygame.K_r:
+          self.roadManager.drawRoad = not self.roadManager.drawRoad
+        elif e.key == pygame.K_l:
+          self.roadManager.drawLine = not self.roadManager.drawLine
+        elif e.key == pygame.K_b:
+          self.blobManager.drawBlobs = not self.blobManager.drawBlobs
+        elif e.key == pygame.K_u:
+          self.updateBlobs = not self.updateBlobs
+      elif e.type == pygame.MOUSEBUTTONUP:
+        self.blobManager.spawnAt(e.pos)
 
   def update(self, dt):
-    self.blobManager.update(dt)
-    self.roadManager.update(dt)
 
     time = pygame.time.get_ticks()
+
+    if self.lastMapReload == 0 or self.lastMapReload + self.mapReloadInterval < time:
+      self.lastMapReload = time
+      print "reloading map..."
+      self.reloadMap()
+
+    if self.updateBlobs:
+      self.blobManager.update(dt)
+
+    self.roadManager.update(dt)
+
+
     if self.lastScoreCheck == 0 or self.lastScoreCheck + self.scoreCheckInterval < time:
       self.lastScoreCheck = time
       print "calculating scores..."
@@ -52,7 +93,8 @@ class Main:
         print "no score change"
 
   def draw(self):
-    self.screen.blit(self.mapData, [0,0, self.screenDim[0], self.screenDim[1]])
+    if self.mapData:
+      self.screen.blit(self.mapData, [0,0, self.screenDim[0], self.screenDim[1]])
 
     self.blobManager.draw(self.screen)
     self.roadManager.draw(self.screen)

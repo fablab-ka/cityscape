@@ -33,14 +33,15 @@ class BlobManager:
     self.screenDim = screenDim
 
     self.blobs = []
-    self.blobColor = (255, 0, 0)
+    self.blobColor = (200, 200, 200)
+    self.drawBlobs = True
 
     self.blobPersistenceInterval = 10000
     self.lastPersistence = 0
 
     self.blobMergeLimit = 10
     self.blobMergeRadiusFactor = 2.5
-    self.spawnRate = 10000
+    self.spawnRate = 1000
     self.lastSpawn = 0
 
     self.blobFile = "blobs.json"
@@ -50,8 +51,6 @@ class BlobManager:
         content = f.read()
         self.blobs = jsonpickle.decode(content)
       print "done."
-    else:
-      self.massiveSpawn(10, 10)
 
   def persistBlobs(self):
     print "persisting blobs..."
@@ -61,33 +60,59 @@ class BlobManager:
     print "done."
 
   def isSet(self, pos):
-    if isinstance(pos, Vector):
-      pos = pos.toIntArr()
-
-    if pos[0] < 0 or pos[1] < 0:
-      return True
-    if pos[0] >= self.screenDim[0] or pos[1] >= self.screenDim[1]:
+    if not self.mapData:
+      print "no mapData yet"
       return True
 
-    px = self.mapData.get_at(pos)
-    return (px.r + px.g + px.b) > 600
+    if not isinstance(pos, Vector):
+      pos = Vector(pos)
 
-  def mutate(self, blob):
+    if pos.x < 0 or pos.y < 0:
+      return True
+    if pos.x >= self.screenDim[0] or pos.y >= self.screenDim[1]:
+      return True
+
+    px = self.mapData.get_at(pos.toIntArr())
+    return (px.r + px.g + px.b) < 600
+
+  def mutateAt(self, index):
+    result = False
+    blob = self.blobs[index]
     newBlob = blob.clone()
 
-    if random() > 0.25:
-      newBlob.pos.x = newBlob.pos.x + choice([1,-1])
-    elif random() > 0.25:
-      newBlob.pos.y = newBlob.pos.y + choice([1,-1])
+    newBlob.radius += 1
+
+    if not self.validate(newBlob):
+      for i in range(5):
+        offset = Vector.randomUnitCircle() * random()*i
+        newBlob.pos += offset
+
+        if self.validate(newBlob):
+          result = True
+          break
     else:
-      newBlob.radius = newBlob.radius + 1
+      result = True
 
-    return newBlob
+    if not result and random() > 0.5:
+      newBlob.radius -= 1
+      for i in range(5):
+        offset = Vector.randomUnitCircle() * random()*i
 
-  def validate(self, blob):
+        if self.validate(newBlob):
+          result = True
+
+
+    if result:
+      self.blobs[index] = newBlob
+
+    return result
+
+  def validate(self, blob, debug=False):
     result = True
     pos = blob.pos
     if self.isSet(pos):
+      if debug:
+        print "isset fail"
       result = False
     else:
       radius = blob.radius
@@ -95,8 +120,10 @@ class BlobManager:
       for x in range(-radius, radius):
         for y in range(-radius, radius):
           if x*x + y*y <= sqrRadius:
-            cPos = [pos.x + x, pos.y + y]
+            cPos = pos + [x, y]
             if self.isSet(cPos):
+              if debug:
+                print "wall collision fail"
               result = False
               break
 
@@ -109,6 +136,8 @@ class BlobManager:
 
         distance = Vector.distanceSqr(otherBlob.pos, blob.pos)
         if distance < (otherBlob.radius + blob.radius) ** 2:
+          if debug:
+            print "blob collision fail"
           result = False
           break
 
@@ -165,38 +194,18 @@ class BlobManager:
 
     return [x, y]
 
+  def spawnAt(self, pos):
+    blob = Blob(pos, 1)
+    if self.validate(blob, True):
+      print "blob spawned at", blob.pos
+      self.blobs.append(blob)
+
+
   def spawn(self):
-    print "spawning blobs"
-    x = -1
-    y = -1
-    if len(self.blobs) > 0:
-      x, y = self.getLocationNextToRandomBlob()
-    else:
-      x = randint(0, self.screenDim[0]-1)
-      y = randint(0, self.screenDim[1]-1)
+    randomBlob = choice(self.blobs)
 
-    if not self.isSet([x, y]):
-      blob = Blob([x, y], 1)
-      if self.validate(blob):
-        print "blob spawned at", blob.pos
-        self.blobs.append(blob)
-      else:
-        print "failed"
-
-  def massiveSpawn(self, massiveSteps, massiveRadius):
-    print "initially spawning blobs"
-
-    total = float(self.screenDim[0] * self.screenDim[1])
-    for mx in range(self.screenDim[0]/massiveSteps):
-      for my in range(self.screenDim[1]/massiveSteps):
-        x = mx*massiveSteps
-        y = my*massiveSteps
-
-        if not self.isSet([x, y]):
-          blob = Blob([x, y], massiveRadius)
-          if self.validate(blob):
-            print len(self.blobs)," blobs spawned (", blob.pos,")"
-            self.blobs.append(blob)
+    pos = randomBlob.pos + (Vector.randomUnitCircle() * randomBlob.radius * 2) * random()
+    self.spawnAt(pos)
 
   def calculateScore(self):
     result = 0
@@ -211,10 +220,7 @@ class BlobManager:
     blobsToTryMerge = []
     for i in range(len(self.blobs)):
       blob = self.blobs[i]
-      mutatedBlob = self.mutate(blob) # mutating blobs
-      if self.validate(mutatedBlob):
-        self.blobs[i] = mutatedBlob
-      else:
+      if not self.mutateAt(i):
         blob.state = blob.state + 1
 
         if blob.radius < self.blobMergeLimit: # merging blobs
@@ -232,10 +238,10 @@ class BlobManager:
       print "removing dead blob at", blob.pos
       self.blobs.remove(blob)
 
-    time = pygame.time.get_ticks()
-    if self.lastSpawn + self.spawnRate > time:
-      self.lastSpawn = time
-      self.spawn()
+    #time = pygame.time.get_ticks()
+    #if self.lastSpawn + self.spawnRate > time:
+    #  self.lastSpawn = time
+    self.spawn()
 
     time = pygame.time.get_ticks()
     if self.lastPersistence + self.blobPersistenceInterval < time:
@@ -243,5 +249,6 @@ class BlobManager:
       self.persistBlobs()
 
   def draw(self, screen):
-    for blob in self.blobs:
-      pygame.draw.circle(screen, self.blobColor, blob.pos, blob.radius)
+    if self.drawBlobs:
+      for blob in self.blobs:
+        pygame.draw.circle(screen, self.blobColor, blob.pos.toIntArr(), blob.radius)

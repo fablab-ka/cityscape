@@ -2,18 +2,21 @@
 import pygame, uuid, math
 
 class RoadManager:
-  def __init__(self, screenDim, mapData, blobManager):
+  def __init__(self, screenDim, blobManager):
     self.screenDim = screenDim
-    self.mapData = mapData
     self.blobManager = blobManager
 
     self.roads = []
-    self.roadColor = (0, 255, 0)
+    self.roadColor = (200, 200, 200)
+    self.roadLineColor = (255, 255, 255)
 
     self.roadDict = {}
 
     self.roadBlobLimitFactor = 3
-    self.roadLimit = 3
+    self.roadLimit = 4
+
+    self.drawRoad = True
+    self.drawLine = True
 
   def getRoadId(self):
     return str(uuid.uuid1())
@@ -24,31 +27,25 @@ class RoadManager:
     start = road[0]
     end = road[1]
 
-    x0 = start[0]
-    x1 = end[0]
-    y0 = start[1]
-    y1 = end[1]
-
-    deltaX = x1 - x0
-    if deltaX == 0:
-      deltaX = 0.000001
-    deltaY = y1 - y0
+    delta = end - start
+    if delta.x == 0:
+      delta.x = 0.000001
     error = 0.0
-    deltaErr = abs(deltaY / float(deltaX))
-    y = y0
+    deltaErr = abs(delta.y / float(delta.x))
+    y = int(end.y)
     points = []
-    for x in range(x0, x1):
-      pos = [int(x), int(y)]
+    for x in range(int(start.x), int(end.x)):
+      pos = [x, y]
       points.append(pos)
       error = error + deltaErr
       while error >= 0.5:
         if not pos in points:
           points.append(pos)
 
-        y = y + math.copysign(1, y1 - y0)
+        y += int(math.copysign(1, end.y - start.y))
         error = error - 1.0
 
-        pos = [int(x), int(y)]
+        pos = [x, y]
 
     for p in points:
       if self.blobManager.isSet(p):
@@ -67,10 +64,34 @@ class RoadManager:
       print "removing road at", road[0], road[1]
       self.roads.remove(road)
 
+  def draw_dashed_line(self, surf, color, origin, target, width=1, dash_length=10):
+    displacement = target - origin
+    length = len(displacement)
+    slope = displacement/length
+
+    for index in range(0, length/dash_length, 2):
+        start = origin + (slope *    index    * dash_length)
+        end   = origin + (slope * (index + 1) * dash_length)
+        pygame.draw.line(surf, color, start.toIntArr(), end.toIntArr(), width)
+
   def draw(self, screen):
     for road in self.roads:
-      #pygame.draw.line(screen, self.roadColor, road[0], road[1], int((road[2] + road[3])/2.0))
-      pygame.draw.line(screen, self.roadColor, road[0], road[1], 1)
+      if self.drawRoad:
+        direction = (road[1] - road[0]).getNormalized()
+        leftDir = direction.getLeftPerpendicular()
+        rightDir = direction.getRightPerpendicular()
+        p1 = road[0] + leftDir * road[2]
+        p2 = road[0] + rightDir * road[2]
+        p3 = road[1] + rightDir * road[3]
+        p4 = road[1] + leftDir * road[3]
+        pygame.draw.polygon(screen, self.roadColor, [p1.toIntArr(), p2.toIntArr(), p3.toIntArr(), p4.toIntArr()])
+      else:
+        pygame.draw.line(screen, (255,0,0), road[0].toIntArr(), road[1].toIntArr(), 1)
+
+    if self.drawRoad and self.drawLine:
+      for road in self.roads:
+        pygame.draw.line(screen, self.roadLineColor, road[0].toIntArr(), road[1].toIntArr(), 1)
+        #self.draw_dashed_line(screen, self.roadLineColor, road[0], road[1])
 
   def regenerate(self):
     print "regenerating roads (for " + str(len(self.blobManager.blobs)) + " blobs)..."

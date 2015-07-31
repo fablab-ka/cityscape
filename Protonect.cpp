@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
       i = 0;
       for (int j=0; j<=10; j++) {
         std::string jIndex = tostr(j);
-        if(remove((filename + jIndex + ".jpg").c_str()) != 0) {
+        if(remove((filename + jIndex + ".png").c_str()) != 0) {
           perror( "Error deleting file" );
         } else {
           puts( "File successfully deleted" );
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
 
     std::string index = tostr(i);
-    cv::imwrite((filename + index + ".jpg").c_str(), thresh);
+    cv::imwrite((filename + index + ".png").c_str(), thresh);
     i += 1;
 
     int key = cv::waitKey(1);
