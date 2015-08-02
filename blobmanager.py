@@ -11,11 +11,13 @@ class Blob:
     self.pos = Vector(pos)
     self.radius = radius
     self.state = 0
+    self.roads = []
 
   def clone(self):
     result = Blob(self.pos, self.radius)
     result.id = self.id
     result.state = self.state
+    result.roads = self.roads
     return result
 
   def __getstate__(self):
@@ -26,6 +28,7 @@ class Blob:
     self.pos = stateData[1]
     self.radius = stateData[2]
     self.state = stateData[3]
+    self.roads = []
 
 class BlobManager:
   def __init__(self, screenDim, mapData):
@@ -33,6 +36,7 @@ class BlobManager:
     self.screenDim = screenDim
 
     self.blobs = []
+    self.blobDict = {}
     self.blobColor = (200, 200, 200)
     self.drawBlobs = True
 
@@ -50,6 +54,8 @@ class BlobManager:
       with open(self.blobFile, 'r') as f:
         content = f.read()
         self.blobs = jsonpickle.decode(content)
+        for b in self.blobs:
+          self.blobDict[b.id] = b
       print "done."
 
   def persistBlobs(self):
@@ -175,12 +181,15 @@ class BlobManager:
         self.blobs.remove(blob)
         self.blobs.remove(otherBlob)
         self.blobs.append(newBlob)
+        self.blobDict.pop(blob.id, None)
+        self.blobDict.pop(otherBlob.id, None)
+        self.blobDict[newBlob.id] = newBlob
         break
 
   def getLocationNextToRandomBlob(self):
     x = -1
     y = -1
-    blob = self.blobs[randint(0, len(self.blobs)-1)]
+    blob = choice(self.blobs)
     d = random() * math.pi
     dir = [
       math.cos(d) * choice([1, -1]),
@@ -194,17 +203,31 @@ class BlobManager:
 
     return [x, y]
 
+  def removeAt(self, pos):
+    for blob in self.blobs:
+      dist = Vector.distanceSqr(blob.pos, pos)
+      print dist, blob.radius ** 2
+      if dist < blob.radius ** 2:
+        self.blobs.remove(blob)
+        self.blobDict.pop(blob.id, None)
+        break
+
   def spawnAt(self, pos):
     blob = Blob(pos, 1)
-    if self.validate(blob, True):
+    if self.validate(blob):
       print "blob spawned at", blob.pos
       self.blobs.append(blob)
+      self.blobDict[blob.id] = blob
 
 
   def spawn(self):
-    randomBlob = choice(self.blobs)
+    if len(self.blobs) > 0:
+      randomBlob = choice(self.blobs)
 
-    pos = randomBlob.pos + (Vector.randomUnitCircle() * randomBlob.radius * 2) * random()
+      pos = randomBlob.pos + (Vector.randomUnitCircle() * randomBlob.radius * 2) * random()
+    else:
+      pos = Vector(random() * self.screenDim[0], random() * self.screenDim[1])
+
     self.spawnAt(pos)
 
   def calculateScore(self):
@@ -237,11 +260,12 @@ class BlobManager:
     for blob in deadBlobs:
       print "removing dead blob at", blob.pos
       self.blobs.remove(blob)
+      self.blobDict.pop(blob.id, None)
 
-    #time = pygame.time.get_ticks()
-    #if self.lastSpawn + self.spawnRate > time:
-    #  self.lastSpawn = time
-    self.spawn()
+    time = pygame.time.get_ticks()
+    if self.lastSpawn + self.spawnRate < time:
+      self.lastSpawn = time
+      self.spawn()
 
     time = pygame.time.get_ticks()
     if self.lastPersistence + self.blobPersistenceInterval < time:
