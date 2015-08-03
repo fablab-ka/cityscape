@@ -29,6 +29,7 @@
 #include <sstream>
 #include <stdio.h>
 #include <signal.h>
+#include <math.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -52,6 +53,49 @@ std::string tostr(int x)
     return str.str();
 }
 
+cv::Mat OpenWarpPerspective(const cv::Mat& _image
+  , const cv::Point2f& tl
+  , const cv::Point2f& tr
+  , const cv::Point2f& br
+  , const cv::Point2f& bl)
+{
+  cv::Point2f source_points[4];
+  cv::Point2f dest_points[4];
+
+  source_points[0] = tl;
+  source_points[1] = tr;
+  source_points[2] = br;
+  source_points[3] = bl;
+
+  float widthA = sqrt(pow(br.x - bl.x, 2) + pow(br.y - bl.y, 2));
+  float widthB = sqrt(pow(tr.x - tl.x, 2) + pow(tr.y - tl.y, 2));
+  int _width;
+  if (widthA > widthB) {
+    _width = (int)widthA;
+  } else {
+    _width = (int)widthB;
+  }
+
+  float heightA = sqrt(pow(tr.x - br.x, 2) + pow(tr.y - br.y, 2));
+  float heightB = sqrt(pow(tl.x - bl.x, 2) + pow(tl.y - bl.y, 2));
+  int _height;
+  if (heightA > heightB) {
+    _height = (int)heightA;
+  } else {
+    _height = (int)heightB;
+  }
+
+  dest_points[0] = cv::Point2f(0,0);
+  dest_points[1] = cv::Point2f(_width-1,0);
+  dest_points[2] = cv::Point2f(_width-1,_height-1);
+  dest_points[3] = cv::Point2f(0,_height-1);
+
+  cv::Mat dst;
+  cv::Mat _transform_matrix = cv::getPerspectiveTransform(source_points, dest_points);
+  cv::warpPerspective(_image, dst, _transform_matrix, cv::Size(_width, _height));
+
+  return dst;
+}
 
 int main(int argc, char *argv[])
 {
@@ -76,7 +120,16 @@ int main(int argc, char *argv[])
   }
 
   std::string serial = freenect2.getDefaultDeviceSerialNumber();
-  int threshold = -1;
+  float threshold = -1;
+  float transform_p1x = -1;
+  float transform_p1y = -1;
+  float transform_p2x = -1;
+  float transform_p2y = -1;
+  float transform_p3x = -1;
+  float transform_p3y = -1;
+  float transform_p4x = -1;
+  float transform_p4y = -1;
+  std::string filename ("test_" );
 
   for(int argI = 1; argI < argc; ++argI)
   {
@@ -109,10 +162,61 @@ int main(int argc, char *argv[])
       std::string thresholdString (argv[argI+1]);
 
       std::istringstream ss(argv[argI+1]);
-      int x;
       if (!(ss >> threshold)) {
         std::cerr << "Invalid number " << argv[argI+1] << '\n';
       }
+
+      argI += 1;
+    }
+    else if (arg == "-p") {
+      std::istringstream p1xString (argv[argI+1]);
+      std::istringstream p1yString (argv[argI+2]);
+      std::istringstream p2xString (argv[argI+3]);
+      std::istringstream p2yString (argv[argI+4]);
+      std::istringstream p3xString (argv[argI+5]);
+      std::istringstream p3yString (argv[argI+6]);
+      std::istringstream p4xString (argv[argI+7]);
+      std::istringstream p4yString (argv[argI+8]);
+
+      if (!(p1xString >> transform_p1x)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p1yString >> transform_p1y)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p2xString >> transform_p2x)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p2yString >> transform_p2y)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p3xString >> transform_p3x)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p3yString >> transform_p3y)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p4xString >> transform_p4x)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      if (!(p4yString >> transform_p4y)) {
+        std::cerr << "Invalid number " << argv[argI+1] << '\n';
+      }
+
+      argI += 8;
+    }
+    else if (arg == "-o") {
+      std::string pathString (argv[argI+1]);
+
+      filename = pathString + "/" + filename;
+      std::cout << filename << std::endl;
 
       argI += 1;
     }
@@ -157,7 +261,6 @@ int main(int argc, char *argv[])
 
   libfreenect2::Registration* registration = new libfreenect2::Registration(dev->getIrCameraParams(), dev->getColorCameraParams());
 
-  std::string filename ("test_" );
   int i = 0;
   while(!protonect_shutdown)
   {
@@ -198,28 +301,44 @@ int main(int argc, char *argv[])
       thresh = img_bw;
     }
 
-    cv::imshow("undistorted", thresh);
+    cv::Mat output;
+    if (transform_p1x >= 0) {
+      cv::Size output_size = thresh.size();
+      std::cout <<
+      transform_p1x * (output_size.width-1) << " " << transform_p1y * (output_size.height-1) << " " <<
+      transform_p2x * (output_size.width-1) << " " << transform_p2y * (output_size.height-1) << " " <<
+      transform_p3x * (output_size.width-1) << " " << transform_p3y * (output_size.height-1) << " " <<
+      transform_p4x * (output_size.width-1) << " " << transform_p4y * (output_size.height-1) << std::endl;
+      output = OpenWarpPerspective(thresh,
+        cv::Point2f(transform_p1x * (output_size.width-1), transform_p1y * (output_size.height-1)),
+        cv::Point2f(transform_p2x * (output_size.width-1), transform_p2y * (output_size.height-1)),
+        cv::Point2f(transform_p3x * (output_size.width-1), transform_p3y * (output_size.height-1)),
+        cv::Point2f(transform_p4x * (output_size.width-1), transform_p4y * (output_size.height-1)));
+    } else {
+      output = thresh;
+    }
 
+    cv::imshow("output", output);
 
     std::string index = tostr(i);
-    cv::imwrite((filename + index + ".png").c_str(), thresh);
+    cv::imwrite((filename + index + ".png").c_str(), output);
     i += 1;
 
-    int key = cv::waitKey(1);
+    int key = cv::waitKey(1000);
     protonect_shutdown = protonect_shutdown || (key > 0 && ((key & 0xFF) == 27)); // shutdown on escape
     if (!protonect_shutdown) {
       std::cout << "key=" << (key & 0xFF) << std::endl;
-      if (key == 82) {
+      if ((key & 0xFF) == 82) {
         threshold += 1;
         std::cout << "increasing threshold" << std::endl;
-      } else if (key == 83) {
+      } else if ((key & 0xFF) == 83) {
         threshold -= 1;
         std::cout << "decreasing threshold" << std::endl;
       }
     }
 
     listener.release(frames);
-    libfreenect2::this_thread::sleep_for(libfreenect2::chrono::milliseconds(1000));
+    //libfreenect2::this_thread::sleep_for(libfreenect2::chrono::milliseconds(1000));
   }
 
   // TODO: restarting ir stream doesn't work!
