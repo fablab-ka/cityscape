@@ -20,7 +20,7 @@ class Motive:
     self.age = pygame.time.get_ticks()
     self.ttl = 15000 + 5000 * random()
 
-    self.color = (255, 0, 0)
+    self.color = (255, 255, 255)
 
     size = 1
     if self.type == MotiveType.Pedestrian:
@@ -58,7 +58,7 @@ class Main:
   def __init__(self):
     pygame.init()
 
-    self.screenDim = (1024, 786)
+    self.screenDim = (1440, 900)
     self.screen = pygame.display.set_mode(self.screenDim)
     self.background = (255, 255, 255)
     self.running = False
@@ -81,6 +81,7 @@ class Main:
     list = range(1, 11)
     list.reverse()
     for i in list:
+      #filename = self.mapDataPath
       filename = self.mapDataPath# + str(i) + ".png"
       if path.isfile(filename):
         #print filename
